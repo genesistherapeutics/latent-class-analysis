@@ -49,8 +49,7 @@ class LCA:
         # theta
         for k in range(self.n_components):
             numerator = np.zeros((n_rows, n_cols))
-            for n in range(n_rows):
-                numerator[n, :] = self.responsibility[n, k] * data[n, :]
+            numerator = self.responsibility[:, k:k+1] * data[:, :]
             numerator = np.sum(numerator, axis=0)
             denominator = np.sum(self.responsibility[:, k])
             self.theta[k] = numerator / denominator
@@ -80,9 +79,10 @@ class LCA:
                                          size=self.n_components,
                                          random_state=self.random_state)
 
+        ll_val = -0
         for i in range(self.max_iter):
             if self.verbose > 0:
-                print('\tEM iteration {n_iter}'.format(n_iter=i))
+                print('\tEM iteration {n_iter}, ll={ll}'.format(n_iter=i, ll=ll_val))
 
             # E-step
             self._do_e_step(data)
@@ -95,7 +95,7 @@ class LCA:
             for k in range(self.n_components):
                 normal_prob = np.prod(stats.bernoulli.pmf(data, p=self.theta[k]), axis=1)
                 aux[:, k] = self.weight[k] * normal_prob
-            ll_val = np.sum(np.log(np.sum(aux, axis=1)))
+            ll_val = np.sum(np.log(np.sum(aux, axis=1))) / data.shape[0]
             if np.abs(ll_val - self.ll_[-1]) < self.tol:
                 break
             else:
@@ -107,5 +107,14 @@ class LCA:
     def predict(self, data):
         return np.argmax(self.predict_proba(data), axis=1)
 
+    def coverage(self, data, thresh=0.01):
+        n_rows, n_cols = np.shape(data)
+        aux = np.zeros(shape=(n_rows, self.n_components))
+        for k in range(self.n_components):
+            normal_prob = np.prod(stats.bernoulli.pmf(data, p=self.theta[k]), axis=1)
+            aux[:, k] = normal_prob
+        return np.count_nonzero(np.max(aux, axis=1) >= thresh) / n_rows
+
     def predict_proba(self, data):
         return self._calculate_responsibility(data)
+
